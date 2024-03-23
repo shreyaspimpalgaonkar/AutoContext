@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta
+
+import httpx
+import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
-import uvicorn
-import httpx
 
 app = FastAPI()
 
@@ -10,9 +12,6 @@ client_id = "6313369380099.6850939569699"
 client_secret = "ebb3c76d1df0c4d918130f564d4a6b1a"
 # Your registered redirect URI
 redirect_uri = "https://localhost:8000/auth/slack/callback"
-
-# The URL for the Slack OAuth access endpoint
-access_token_url = "https://slack.com/api/oauth.v2.access"
 
 access_token = None
 
@@ -30,7 +29,7 @@ async def say_hello(name: str):
 @app.get("/auth/slack")
 async def auth_slack():
     # Redirect the user to Slack's authorization page
-    slack_auth_url = f"https://slack.com/oauth/v2/authorize?client_id={client_id}&user_scope=channels:history&redirect_uri={redirect_uri}"
+    slack_auth_url = f"https://slack.com/oauth/v2/authorize?client_id={client_id}&user_scope=channels:history,channels:read,users:read&redirect_uri={redirect_uri}"
     return RedirectResponse(url=slack_auth_url)
 
 
@@ -53,7 +52,7 @@ async def auth_slack_callback(request: Request):
 
     # Make the asynchronous POST request to exchange the code for a token
     async with httpx.AsyncClient() as client:
-        response = await client.post(access_token_url, data=data)
+        response = await client.post("https://slack.com/api/oauth.v2.access", data=data)
 
     # Check if the request was successful
     if response.status_code == 200:
@@ -73,6 +72,70 @@ async def auth_slack_callback(request: Request):
     else:
         # HTTP request failed
         raise HTTPException(status_code=response.status_code, detail="Failed to exchange code for access token.")
+
+
+@app.get("/summarize")
+async def summarize(request: Request):
+    global access_token
+
+    # Assuming `token` is the access token you obtained through OAuth
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get("https://slack.com/api/conversations.list", headers=headers)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail="Failed to fetch channels from Slack")
+
+    if not response.json().get("ok"):
+        raise HTTPException(status_code=400,
+                            detail=f"Failed to fetch channels from Slack, error: {response.json().get('error')}")
+
+    messages = []
+    users = {}
+
+    for channel in response.json().get("channels", []):
+        if channel["is_member"] is not True:
+            continue
+        channel_id = channel["id"]
+        channel_name = channel["name"]
+
+        data = {
+            "channel": channel_id,
+            "limit": 999,
+            "oldest": (datetime.now() - timedelta(days=1)).timestamp(),
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post("https://slack.com/api/conversations.history", data=data, headers=headers)
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Failed to fetch messages from Slack")
+
+        if not response.json().get("ok"):
+            raise HTTPException(status_code=400,
+                                detail=f"Failed to fetch messages from Slack, error: {response.json().get('error')}")
+
+        for message in response.json().get("messages", []):
+            if message['user'] not in users:
+                async with httpx.AsyncClient() as client:
+                    user_response = await client.get(f"https://slack.com/api/users.info?user={message['user']}",
+                                                     headers=headers)
+
+                if user_response.status_code != 200:
+                    raise HTTPException(status_code=user_response.status_code,
+                                        detail="Failed to fetch user info from Slack")
+                if not user_response.json().get("ok"):
+                    raise HTTPException(status_code=400,
+                                        detail=f"Failed to fetch user info from Slack, error: {user_response.json().get('error')}")
+                users[message['user']] = user_response.json().get("user", {})['profile']['real_name']
+            messages.append({
+                "channel": channel_name,
+                "user": users[message['user']],
+                "text": message.get("text", ""),
+            })
+
+    return messages
 
 
 if __name__ == "__main__":
