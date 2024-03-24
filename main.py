@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+import urllib.parse
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -25,6 +26,81 @@ access_token = None
 
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+class RAG_Pipeline:
+    
+    def __init__(self):
+        
+        from r2r.pipelines import BasicIngestionPipeline, BasicEmbeddingPipeline, BasicRAGPipeline
+        from r2r.main.factory import E2EPipelineFactory
+        from r2r.client import R2RClient
+        
+        import os
+        os.environ['OPENAI_API_KEY'] = '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'
+        os.environ['QDRANT_HOST'] = 'https://99d0bcc3-42b3-43ff-ad05-8d8ced544803.us-east4-0.gcp.cloud.qdrant.io'
+        os.environ['QDRANT_PORT'] = '6333'
+        os.environ['QDRANT_API_KEY'] = 'nyA91hNvud9ZSIUYqeZdIP3kk4Tqv79qr_StSKrz_C5yuGyz3Mj6sw'
+        os.environ['OPEN_API_KEY'] = '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'
+        os.environ['OPENAI_API_KEY'] = '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'
+        os.environ['LOCAL_DB_PATH'] = 'local_db'
+        
+        self.client = R2RClient('https://sciphi-cc1d7a62-67a3-41f7-8cd5-a42862fdf25f-qwpin2swwa-ue.a.run.app')
+
+    def add_entry(self, url, text):
+        """
+        Add a new entry to the database.
+        """
+        
+        import uuid
+        import json
+        print('Adding entry')
+                
+        # chunk into 2048 char
+        chunks = [text[i:i+2048] for i in range(0, len(text), 2048)]
+            
+        entries = []    
+        for i, txt in enumerate(chunks):
+            entries.append(
+                {
+                    'document_id': str(uuid.uuid5(uuid.NAMESPACE_DNS, f"doc {i}")),
+                    'blobs' : {'txt' : txt},
+                    'metadata': {'url': url},
+                }
+            )
+        # entries = [
+        #     {
+        #         "document_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "doc 2")),
+        #         "blobs": {"txt": "Second test entry"},
+        #         "metadata": {"url": url},
+        #     },
+        #     {
+        #         "document_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "doc 3")),
+        #         "blobs": {"txt": "Third test entry"},
+        #         "metadata": {"tags": url='url'},
+        #     },
+        # ]
+        bulk_upsert_response = self.client.add_entries(entries, do_upsert=True)
+            
+        # try:
+        #     user_id_0 = str(uuid.uuid5(uuid.NAMESPACE_DNS, "user_0"))            
+        #     document_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, url))
+        #     metadata = {"user_id": user_id_0, "chunk_prefix": ''}
+        #     settings: dict = {}
+        #     upload_response = self.client.add_entry(
+        #         document_id, {'txt': text},
+        #         do_upsert = True,
+        #     )            
+        #     print(upload_response)
+        # except Exception as e:
+        #     print(e)
+        #     return {"error": str(e)}
+
+        # return upload_response
+        
+    def get_entry(self, txt):
+        return self.client.search(txt, 5)
+
+
+rag_pipeline = RAG_Pipeline()
 
 @app.get("/hello/{name}")
 async def say_hello(name: str):
@@ -170,5 +246,38 @@ async def root():
     return HTMLResponse(content=html_content)
 
 
+@app.post('/add_entry')
+async def get_embedding(request: Request):
+    print("inside add_entry")
+    # url = request.query_params['url']
+    # convert % to space
+    # text = request.query_params['text']
+    req = await request.json()
+    result = rag_pipeline.add_entry(req['text'], req['url'])
+    return result
+
+@app.post('/get_entry')
+async def get_embedding(request: Request):
+    # text = request.query_params['text']
+    # result = rag_pipeline.client.search(text, 1)
+    req = await request.json()
+
+    search_response = rag_pipeline.client.search(
+        req['text'],
+        5,
+        # filters={"user_id": self.user_id},
+    )
+    all_txt = []
+    for i, response in enumerate(search_response):
+        text = response["metadata"]["text"]
+        # title, body = text.split("\n", 1)
+        # print(f"Result {i + 1}: {title}")
+        # print(body[:500])
+        # print("\n")
+        all_txt.append(text)
+        
+    return ''.join(all_txt)
+
 if __name__ == "__main__":
     uvicorn.run("main:app", port=8000, reload=True, ssl_keyfile="key.pem", ssl_certfile="cert.pem")
+    # create a DB locally
