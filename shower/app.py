@@ -8,10 +8,13 @@ from pathlib import Path
 
 from modal import Mount, asgi_app
 
+from .embedding import RAG_Pipeline
+
 from .common import stub
 from .llm_zephyr import Zephyr
-from .transcriber import Whisper
+# from .transcriber import Whisper
 from .tts import Tortoise
+from .scraper import Scraper
 
 static_path = Path(__file__).with_name("frontend").resolve()
 
@@ -30,89 +33,116 @@ def web():
     from fastapi.staticfiles import StaticFiles
 
     web_app = FastAPI()
-    transcriber = Whisper()
-    llm = Zephyr()
+    # transcriber = Whisper()
+    web_scraper = Scraper()
+    # llm = Zephyr()
+    rag_pipeline = RAG_Pipeline()
     tts = Tortoise()
+        
+    print("Opening App.py")
+    
+    
+    @web_app.post('/add_entry')
+    async def get_embedding(request: Request):
+        body = await request.body()
+        result = await rag_pipeline.add_entry.remote(body)
+        return result
+    
+    @web_app.post('/get_entry')
+    async def get_embedding(request: Request):
+        body = await request.body()
+        result = await rag_pipeline.get_context.remote(body)
+        return result
 
-    @web_app.post("/transcribe")
-    async def transcribe(request: Request):
-        bytes = await request.body()
-        result = transcriber.transcribe_segment.remote(bytes)
-        return result["text"]
 
-    @web_app.post("/generate")
-    async def generate(request: Request):
+    @web_app.post('/retrieve')
+    async def retrieve(request: Request):
         body = await request.json()
-        tts_enabled = body["tts"]
+        result = await llm.retrieve.remote(body["input"])
+        return result
 
-        if "noop" in body:
-            llm.generate.spawn("")
-            # Warm up 3 containers for now.
-            if tts_enabled:
-                for _ in range(3):
-                    tts.speak.spawn("")
-            return
+    
+    @web_app.post("/scraper")
+    async def email_scrape(request: Request):
+        print("Scraping emails")
+        bytes = await request.body()
+        result = await web_scraper.get_claude_prompt.remote()
+        print(result)
+        return result['text']
 
-        def speak(sentence):
-            if tts_enabled:
-                fc = tts.speak.spawn(sentence)
-                return {
-                    "type": "audio",
-                    "value": fc.object_id,
-                }
-            else:
-                return {
-                    "type": "sentence",
-                    "value": sentence,
-                }
+    # @web_app.post("/generate")
+    # async def generate(request: Request):
+    #     body = await request.json()
+    #     tts_enabled = body["tts"]
 
-        def gen():
-            sentence = ""
+    #     if "noop" in body:
+    #         llm.generate.spawn("")
+    #         # Warm up 3 containers for now.
+    #         if tts_enabled:
+    #             for _ in range(3):
+    #                 tts.speak.spawn("")
+    #         return
 
-            for segment in llm.generate.remote_gen(body["input"], body["history"]):
-                yield {"type": "text", "value": segment}
-                sentence += segment
+    #     def speak(sentence):
+    #         if tts_enabled:
+    #             fc = tts.speak.spawn(sentence)
+    #             return {
+    #                 "type": "audio",
+    #                 "value": fc.object_id,
+    #             }
+    #         else:
+    #             return {
+    #                 "type": "sentence",
+    #                 "value": sentence,
+    #             }
 
-                for p in PUNCTUATION:
-                    if p in sentence:
-                        prev_sentence, new_sentence = sentence.rsplit(p, 1)
-                        yield speak(prev_sentence)
-                        sentence = new_sentence
+    #     def gen():
+    #         sentence = ""
 
-            if sentence:
-                yield speak(sentence)
+    #         for segment in llm.generate.remote_gen(body["input"], body["history"]):
+    #             yield {"type": "text", "value": segment}
+    #             sentence += segment
 
-        def gen_serialized():
-            for i in gen():
-                yield json.dumps(i) + "\x1e"
+    #             for p in PUNCTUATION:
+    #                 if p in sentence:
+    #                     prev_sentence, new_sentence = sentence.rsplit(p, 1)
+    #                     yield speak(prev_sentence)
+    #                     sentence = new_sentence
 
-        return StreamingResponse(
-            gen_serialized(),
-            media_type="text/event-stream",
-        )
+    #         if sentence:
+    #             yield speak(sentence)
 
-    @web_app.get("/audio/{call_id}")
-    async def get_audio(call_id: str):
-        from modal.functions import FunctionCall
+    #     def gen_serialized():
+    #         for i in gen():
+    #             yield json.dumps(i) + "\x1e"
 
-        function_call = FunctionCall.from_id(call_id)
-        try:
-            result = function_call.get(timeout=30)
-        except TimeoutError:
-            return Response(status_code=202)
+    #     return StreamingResponse(
+    #         gen_serialized(),
+    #         media_type="text/event-stream",
+    #     )
 
-        if result is None:
-            return Response(status_code=204)
+    # @web_app.get("/audio/{call_id}")
+    # async def get_audio(call_id: str):
+    #     from modal.functions import FunctionCall
 
-        return StreamingResponse(result, media_type="audio/wav")
+    #     function_call = FunctionCall.from_id(call_id)
+    #     try:
+    #         result = function_call.get(timeout=30)
+    #     except TimeoutError:
+    #         return Response(status_code=202)
 
-    @web_app.delete("/audio/{call_id}")
-    async def cancel_audio(call_id: str):
-        from modal.functions import FunctionCall
+    #     if result is None:
+    #         return Response(status_code=204)
 
-        print("Cancelling", call_id)
-        function_call = FunctionCall.from_id(call_id)
-        function_call.cancel()
+    #     return StreamingResponse(result, media_type="audio/wav")
+
+    # @web_app.delete("/audio/{call_id}")
+    # async def cancel_audio(call_id: str):
+    #     from modal.functions import FunctionCall
+
+    #     print("Cancelling", call_id)
+    #     function_call = FunctionCall.from_id(call_id)
+    #     function_call.cancel()
 
     web_app.mount("/", StaticFiles(directory="/assets", html=True))
     return web_app
