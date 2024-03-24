@@ -6,9 +6,12 @@ import anthropic
 import httpx
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Your Slack app's credentials (don't check these in in a real app)
 client_id = "6313369380099.6850939569699"
@@ -21,11 +24,6 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")  # never check this in!
 access_token = None
 
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
 
 
 @app.get("/hello/{name}")
@@ -153,6 +151,23 @@ async def summarize(request: Request):
     )
 
     return {"summary": message.content}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    html_content = """
+    <html>
+        <head>
+            <title>Slack Integration</title>
+        </head>
+        <body>
+            <button id="connect-slack">Connect to Slack</button>
+            <button id="summarize-slack">Summarize Yesterday's Messages</button>
+            <script src="/static/main.js"></script>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 
 if __name__ == "__main__":
