@@ -146,6 +146,7 @@ async def auth_slack_callback(request: Request):
             # Example: return {"access_token": auth_response["access_token"]}
             # return auth_response
             access_token = auth_response['authed_user']["access_token"]
+            print("access token: ", access_token)
             return RedirectResponse(url="/")
         else:
             # Handle error from Slack
@@ -155,8 +156,7 @@ async def auth_slack_callback(request: Request):
         raise HTTPException(status_code=response.status_code, detail="Failed to exchange code for access token.")
 
 
-@app.get("/summarize")
-async def summarize(request: Request):
+async def get_recent_messages():
     global access_token
 
     # Assuming `token` is the access token you obtained through OAuth
@@ -215,14 +215,23 @@ async def summarize(request: Request):
                 "user": users[message['user']],
                 "text": message.get("text", ""),
             })
+    return messages
 
+
+@app.get("/messages")
+async def get_messages(request: Request):
+    return json.dumps(await get_recent_messages())
+
+
+@app.get("/summarize")
+async def summarize(request: Request):
     message = anthropic_client.messages.create(
         model="claude-3-opus-20240229",
         max_tokens=4096,
         temperature=0.0,
         system="The user will provide a Slack transcript in the form of a list of messages with three attributes each: the channel name, the sender name, and the message text. Summarize the messages for the user, capturing the most important content, in no more than a few paragraphs.",
         messages=[
-            {"role": "user", "content": json.dumps(messages)},
+            {"role": "user", "content": json.dumps(await get_recent_messages())},
         ]
     )
 
