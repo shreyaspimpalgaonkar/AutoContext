@@ -7,7 +7,7 @@ from modal import Image, method
 import io
 import tempfile
 
-from modal import Image, method, enter
+from modal import Image, method, enter, Dict
 
 from .common import stub
 
@@ -154,6 +154,7 @@ class RAG_Pipeline:
         from r2r.pipelines import BasicIngestionPipeline, BasicEmbeddingPipeline, BasicRAGPipeline
         from r2r.main.factory import E2EPipelineFactory
         
+        
         import os
         os.environ['OPENAI_API_KEY'] = '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'
         os.environ['QDRANT_HOST'] = 'https://99d0bcc3-42b3-43ff-ad05-8d8ced544803.us-east4-0.gcp.cloud.qdrant.io'
@@ -161,22 +162,66 @@ class RAG_Pipeline:
         os.environ['QDRANT_API_KEY'] = 'nyA91hNvud9ZSIUYqeZdIP3kk4Tqv79qr_StSKrz_C5yuGyz3Mj6sw'
         os.environ['OPEN_API_KEY'] = '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'
         os.environ['OPENAI_API_KEY'] = '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'
+        os.environ['LOCAL_DB_PATH'] = 'local_db'
         
-        self.app = E2EPipelineFactory.create_pipeline(
-            # override with your own custom ingestion pipeline
-            ingestion_pipeline_impl=BasicIngestionPipeline,
-            # override with your own custom embedding pipeline
-            embedding_pipeline_impl=BasicEmbeddingPipeline,
-            # override with your own custom RAG pipeline
-            rag_pipeline_impl=BasicRAGPipeline,
-            # override with your own config.json
-            config_path='config.json',
-        )
+        # self.app = E2EPipelineFactory.create_pipeline(
+        #     # override with your own custom ingestion pipeline
+        #     ingestion_pipeline_impl=BasicIngestionPipeline,
+        #     # override with your own custom embedding pipeline
+        #     embedding_pipeline_impl=BasicEmbeddingPipeline,
+        #     # override with your own custom RAG pipeline
+        #     rag_pipeline_impl=BasicRAGPipeline,
+        #     # override with your own config.json
+        #     config_path='config.json',
+        # )
+
+        # print(self.app)
+
+        # from r2r.client import R2RClient
+        
+        base_url = "https://99d0bcc3-42b3-43ff-ad05-8d8ced544803.us-east4-0.gcp.cloud.qdrant.io"  # Replace with your actual deployed API URL
+        self.client = R2RClient(base_url)
+        
+        self.my_dict = Dict.ephemeral("my_persisted_dict")
 
     @method()
     def add_entry(self, entry):
         """
         Add a new entry to the database.
         """
+        
+        import uuid
+        import json
+        print('Adding entry')
+        
         print(entry)
-        return self.app.add_entry(entry)
+        
+        entry = entry.decode('utf-8').replace("'", '"')
+        
+        print(entry)
+
+        json_body = json.loads(entry)
+        print(json_body)
+        
+        file_path = json_body['url']
+
+        
+        user_id_0 = str(uuid.uuid5(uuid.NAMESPACE_DNS, "user_0"))
+        
+        document_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, file_path))
+        metadata = {"user_id": user_id_0, "chunk_prefix": ''}
+        settings: dict = {}
+        upload_response = self.client.add_entry(
+            document_id, {'txt': json_body['body']}, metadata, settings
+        )
+
+        print(upload_response)
+        
+        ret = self.client.add_entry(str(uuid.uuid5(uuid.NAMESPACE_DNS, json_body['url'])),  # document_id
+            {"txt": json_body['body']},
+            {"tags": ["example", "test"]},
+            do_upsert=True,)
+        
+        print(ret)
+
+        return self.my_dict

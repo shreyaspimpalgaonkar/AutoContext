@@ -11,9 +11,9 @@ from modal import Mount, asgi_app
 from .embedding import RAG_Pipeline
 
 from .common import stub
-from .llm_zephyr import Zephyr
+# from .llm_zephyr import Zephyr
 # from .transcriber import Whisper
-from .tts import Tortoise
+# from .tts import Tortoise
 from .scraper import Scraper
 
 static_path = Path(__file__).with_name("frontend").resolve()
@@ -37,7 +37,7 @@ def web():
     web_scraper = Scraper()
     # llm = Zephyr()
     rag_pipeline = RAG_Pipeline()
-    tts = Tortoise()
+    # tts = Tortoise()
         
     print("Opening App.py")
     
@@ -45,22 +45,22 @@ def web():
     @web_app.post('/add_entry')
     async def get_embedding(request: Request):
         body = await request.body()
+        print(body)
         result = await rag_pipeline.add_entry.remote(body)
         return result
     
     @web_app.post('/get_entry')
     async def get_embedding(request: Request):
         body = await request.body()
+        # jsonify the body
         result = await rag_pipeline.get_context.remote(body)
         return result
 
-
-    @web_app.post('/retrieve')
-    async def retrieve(request: Request):
-        body = await request.json()
-        result = await llm.retrieve.remote(body["input"])
-        return result
-
+    # @web_app.post('/retrieve')
+    # async def retrieve(request: Request):
+    #     body = await request.json()
+    #     result = await llm.retrieve.remote(body["input"])
+    #     return result
     
     @web_app.post("/scraper")
     async def email_scrape(request: Request):
