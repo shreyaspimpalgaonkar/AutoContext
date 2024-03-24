@@ -1,5 +1,8 @@
+import json
+import os
 from datetime import datetime, timedelta
 
+import anthropic
 import httpx
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
@@ -13,7 +16,11 @@ client_secret = "ebb3c76d1df0c4d918130f564d4a6b1a"
 # Your registered redirect URI
 redirect_uri = "https://localhost:8000/auth/slack/callback"
 
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")  # never check this in!
+
 access_token = None
+
+anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
 @app.get("/")
@@ -135,7 +142,17 @@ async def summarize(request: Request):
                 "text": message.get("text", ""),
             })
 
-    return messages
+    message = anthropic_client.messages.create(
+        model="claude-3-opus-20240229",
+        max_tokens=4096,
+        temperature=0.0,
+        system="The user will provide a Slack transcript in the form of a list of messages with three attributes each: the channel name, the sender name, and the message text. Summarize the messages for the user, capturing the most important content, in no more than a few paragraphs.",
+        messages=[
+            {"role": "user", "content": json.dumps(messages)},
+        ]
+    )
+
+    return {"summary": message.content}
 
 
 if __name__ == "__main__":
