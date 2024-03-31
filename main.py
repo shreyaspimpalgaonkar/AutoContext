@@ -5,65 +5,73 @@ from datetime import datetime, timedelta
 import anthropic
 import httpx
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.responses import RedirectResponse
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-import urllib.parse
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Your Slack app's credentials (don't check these in in a real app)
-client_id = "6313369380099.6850939569699"
-client_secret = "ebb3c76d1df0c4d918130f564d4a6b1a"
-# Your registered redirect URI
-redirect_uri = "https://localhost:8000/auth/slack/callback"
+load_dotenv()  # This loads the environment variables from .env.
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")  # never check this in!
+client_id = os.environ.get("SLACK_CLIENT_ID")
+client_secret = os.environ.get("SLACK_CLIENT_SECRET")
+redirect_uri = os.environ.get("SLACK_REDIRECT_URI")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 access_token = None
 
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+
 class RAG_Pipeline:
-    
     def __init__(self):
-        
-        from r2r.pipelines import BasicIngestionPipeline, BasicEmbeddingPipeline, BasicRAGPipeline
-        from r2r.main.factory import E2EPipelineFactory
-        from r2r.client import R2RClient
-        
         import os
-        os.environ['OPENAI_API_KEY'] = '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'
-        os.environ['QDRANT_HOST'] = 'https://99d0bcc3-42b3-43ff-ad05-8d8ced544803.us-east4-0.gcp.cloud.qdrant.io'
-        os.environ['QDRANT_PORT'] = '6333'
-        os.environ['QDRANT_API_KEY'] = 'nyA91hNvud9ZSIUYqeZdIP3kk4Tqv79qr_StSKrz_C5yuGyz3Mj6sw'
-        os.environ['OPEN_API_KEY'] = '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'
-        os.environ['OPENAI_API_KEY'] = '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'
-        os.environ['LOCAL_DB_PATH'] = 'local_db'
-        
-        self.client = R2RClient('https://sciphi-cc1d7a62-67a3-41f7-8cd5-a42862fdf25f-qwpin2swwa-ue.a.run.app')
+
+        from r2r.client import R2RClient
+
+        os.environ["OPENAI_API_KEY"] = (
+            "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"
+        )
+        os.environ["QDRANT_HOST"] = (
+            "https://99d0bcc3-42b3-43ff-ad05-8d8ced544803.us-east4-0.gcp.cloud.qdrant.io"
+        )
+        os.environ["QDRANT_PORT"] = "6333"
+        os.environ["QDRANT_API_KEY"] = (
+            "nyA91hNvud9ZSIUYqeZdIP3kk4Tqv79qr_StSKrz_C5yuGyz3Mj6sw"
+        )
+        os.environ["OPEN_API_KEY"] = (
+            "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"
+        )
+        os.environ["OPENAI_API_KEY"] = (
+            "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"
+        )
+        os.environ["LOCAL_DB_PATH"] = "local_db"
+
+        self.client = R2RClient(
+            "https://sciphi-cc1d7a62-67a3-41f7-8cd5-a42862fdf25f-qwpin2swwa-ue.a.run.app"
+        )
 
     def add_entry(self, url, text):
         """
         Add a new entry to the database.
         """
-        
+
         import uuid
-        import json
-        print('Adding entry')
-                
+
+        print("Adding entry")
+
         # chunk into 2048 char
-        chunks = [text[i:i+2048] for i in range(0, len(text), 2048)]
-            
-        entries = []    
+        chunks = [text[i : i + 2048] for i in range(0, len(text), 2048)]
+
+        entries = []
         for i, txt in enumerate(chunks):
             entries.append(
                 {
-                    'document_id': str(uuid.uuid5(uuid.NAMESPACE_DNS, f"doc {i}")),
-                    'blobs' : {'txt' : txt},
-                    'metadata': {'url': url},
+                    "document_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"doc {i}")),
+                    "blobs": {"txt": txt},
+                    "metadata": {"url": url},
                 }
             )
         # entries = [
@@ -79,28 +87,29 @@ class RAG_Pipeline:
         #     },
         # ]
         bulk_upsert_response = self.client.add_entries(entries, do_upsert=True)
-            
+
         # try:
-        #     user_id_0 = str(uuid.uuid5(uuid.NAMESPACE_DNS, "user_0"))            
+        #     user_id_0 = str(uuid.uuid5(uuid.NAMESPACE_DNS, "user_0"))
         #     document_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, url))
         #     metadata = {"user_id": user_id_0, "chunk_prefix": ''}
         #     settings: dict = {}
         #     upload_response = self.client.add_entry(
         #         document_id, {'txt': text},
         #         do_upsert = True,
-        #     )            
+        #     )
         #     print(upload_response)
         # except Exception as e:
         #     print(e)
         #     return {"error": str(e)}
 
         # return upload_response
-        
+
     def get_entry(self, txt):
         return self.client.search(txt, 5)
 
 
 rag_pipeline = RAG_Pipeline()
+
 
 @app.get("/hello/{name}")
 async def say_hello(name: str):
@@ -117,9 +126,11 @@ async def auth_slack():
 @app.get("/auth/slack/callback")
 async def auth_slack_callback(request: Request):
     # Handle the callback from Slack, including error handling and exchanging the code for an access token
-    code = request.query_params.get('code')
+    code = request.query_params.get("code")
     if not code:
-        raise HTTPException(status_code=400, detail="Slack OAuth callback didn't return a code.")
+        raise HTTPException(
+            status_code=400, detail="Slack OAuth callback didn't return a code."
+        )
     # Exchange the code for a token
     # Make sure to handle errors and securely store the access token for the user
     # post to https://slack.com/api/oauth.v2.access, passing in code as a query param
@@ -128,7 +139,7 @@ async def auth_slack_callback(request: Request):
         "client_id": client_id,
         "client_secret": client_secret,
         "code": code,
-        "redirect_uri": redirect_uri
+        "redirect_uri": redirect_uri,
     }
 
     # Make the asynchronous POST request to exchange the code for a token
@@ -145,15 +156,20 @@ async def auth_slack_callback(request: Request):
             # Successfully obtained access token, handle it according to your application's logic
             # Example: return {"access_token": auth_response["access_token"]}
             # return auth_response
-            access_token = auth_response['authed_user']["access_token"]
+            access_token = auth_response["authed_user"]["access_token"]
             print("access token: ", access_token)
             return RedirectResponse(url="/")
         else:
             # Handle error from Slack
-            raise HTTPException(status_code=400, detail=f"Slack API error: {auth_response.get('error')}")
+            raise HTTPException(
+                status_code=400, detail=f"Slack API error: {auth_response.get('error')}"
+            )
     else:
         # HTTP request failed
-        raise HTTPException(status_code=response.status_code, detail="Failed to exchange code for access token.")
+        raise HTTPException(
+            status_code=response.status_code,
+            detail="Failed to exchange code for access token.",
+        )
 
 
 async def get_recent_messages():
@@ -163,14 +179,21 @@ async def get_recent_messages():
     headers = {"Authorization": f"Bearer {access_token}"}
 
     async with httpx.AsyncClient() as client:
-        response = await client.get("https://slack.com/api/conversations.list", headers=headers)
+        response = await client.get(
+            "https://slack.com/api/conversations.list", headers=headers
+        )
 
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Failed to fetch channels from Slack")
+        raise HTTPException(
+            status_code=response.status_code,
+            detail="Failed to fetch channels from Slack",
+        )
 
     if not response.json().get("ok"):
-        raise HTTPException(status_code=400,
-                            detail=f"Failed to fetch channels from Slack, error: {response.json().get('error')}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to fetch channels from Slack, error: {response.json().get('error')}",
+        )
 
     messages = []
     users = {}
@@ -188,33 +211,52 @@ async def get_recent_messages():
         }
 
         async with httpx.AsyncClient() as client:
-            response = await client.post("https://slack.com/api/conversations.history", data=data, headers=headers)
+            response = await client.post(
+                "https://slack.com/api/conversations.history",
+                data=data,
+                headers=headers,
+            )
 
         if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail="Failed to fetch messages from Slack")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="Failed to fetch messages from Slack",
+            )
 
         if not response.json().get("ok"):
-            raise HTTPException(status_code=400,
-                                detail=f"Failed to fetch messages from Slack, error: {response.json().get('error')}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to fetch messages from Slack, error: {response.json().get('error')}",
+            )
 
         for message in response.json().get("messages", []):
-            if message['user'] not in users:
+            if message["user"] not in users:
                 async with httpx.AsyncClient() as client:
-                    user_response = await client.get(f"https://slack.com/api/users.info?user={message['user']}",
-                                                     headers=headers)
+                    user_response = await client.get(
+                        f"https://slack.com/api/users.info?user={message['user']}",
+                        headers=headers,
+                    )
 
                 if user_response.status_code != 200:
-                    raise HTTPException(status_code=user_response.status_code,
-                                        detail="Failed to fetch user info from Slack")
+                    raise HTTPException(
+                        status_code=user_response.status_code,
+                        detail="Failed to fetch user info from Slack",
+                    )
                 if not user_response.json().get("ok"):
-                    raise HTTPException(status_code=400,
-                                        detail=f"Failed to fetch user info from Slack, error: {user_response.json().get('error')}")
-                users[message['user']] = user_response.json().get("user", {})['profile']['real_name']
-            messages.append({
-                "channel": channel_name,
-                "user": users[message['user']],
-                "text": message.get("text", ""),
-            })
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Failed to fetch user info from Slack, error: {user_response.json().get('error')}",
+                    )
+                users[message["user"]] = user_response.json().get("user", {})[
+                    "profile"
+                ]["real_name"]
+            messages.append(
+                {
+                    "channel": channel_name,
+                    "user": users[message["user"]],
+                    "text": message.get("text", ""),
+                }
+            )
     return messages
 
 
@@ -232,7 +274,7 @@ async def summarize(request: Request):
         system="The user will provide a Slack transcript in the form of a list of messages with three attributes each: the channel name, the sender name, and the message text. Summarize the messages for the user, capturing the most important content, in no more than a few paragraphs.",
         messages=[
             {"role": "user", "content": json.dumps(await get_recent_messages())},
-        ]
+        ],
     )
 
     return {"summary": message.content}
@@ -255,24 +297,25 @@ async def root():
     return HTMLResponse(content=html_content)
 
 
-@app.post('/add_entry')
+@app.post("/add_entry")
 async def get_embedding(request: Request):
     print("inside add_entry")
     # url = request.query_params['url']
     # convert % to space
     # text = request.query_params['text']
     req = await request.json()
-    result = rag_pipeline.add_entry(req['text'], req['url'])
+    result = rag_pipeline.add_entry(req["text"], req["url"])
     return result
 
-@app.post('/get_entry')
+
+@app.post("/get_entry")
 async def get_embedding(request: Request):
     # text = request.query_params['text']
     # result = rag_pipeline.client.search(text, 1)
     req = await request.json()
 
     search_response = rag_pipeline.client.search(
-        req['text'],
+        req["text"],
         5,
         # filters={"user_id": self.user_id},
     )
@@ -284,9 +327,16 @@ async def get_embedding(request: Request):
         # print(body[:500])
         # print("\n")
         all_txt.append(text)
-        
-    return ''.join(all_txt)
+
+    return "".join(all_txt)
+
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", port=8000, reload=True, ssl_keyfile="key.pem", ssl_certfile="cert.pem")
+    uvicorn.run(
+        "main:app",
+        port=8000,
+        reload=True,
+        ssl_keyfile="key.pem",
+        ssl_certfile="cert.pem",
+    )
     # create a DB locally
