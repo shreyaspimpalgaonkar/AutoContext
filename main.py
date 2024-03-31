@@ -2,6 +2,7 @@ import os
 import uuid
 
 import anthropic
+import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -93,26 +94,28 @@ async def get_embedding(request: Request):
     return "".join(all_txt)
 
 
-# if __name__ == "__main__":
-#     uvicorn.run(
-#         "main:app",
-#         port=8000,
-#         reload=True,
-#         ssl_keyfile="key.pem",
-#         ssl_certfile="cert.pem",
-#     )
+if __name__ == "__main__":
+    uvicorn.run(
+        "main:app",
+        port=8000,
+        reload=True,
+        ssl_keyfile="key.pem",
+        ssl_certfile="cert.pem",
+    )
 # create a DB locally
 
 
 stub = Stub()
-image = Image.from_dockerfile(
-    "Dockerfile", context_mount=Mount.from_local_file("requirements.txt")
-)
+image = Image.from_registry("python:3.11")
+image = image.pip_install_from_requirements("requirements.txt")
 
 
 @stub.function(
     image=image,
-    mounts=[Mount.from_local_dir("./", remote_path="/root/rtr_app/")],
+    mounts=[
+        Mount.from_local_dir("./static", remote_path="/root/static"),
+        Mount.from_local_file(".env", "/root/.env"),
+    ],
 )
 @asgi_app()
 def fastapi_app():
