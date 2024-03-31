@@ -15,6 +15,7 @@ RUN apt-get update && \
 
 # Install Git
 RUN apt-get update && apt-get install -y git
+RUN apt-get install -y vim
 
 # Install pip
 RUN apt-get install -y curl && \
