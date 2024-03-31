@@ -17,13 +17,11 @@ RUN apt-get update && \
 RUN apt-get update && apt-get install -y git
 RUN apt-get install -y vim
 
-# Install pip
-RUN apt-get install -y curl && \
-    curl -sS https://bootstrap.pypa.io/get-pip.py | python3
-
 # Copy your project to the container
-WORKDIR /app
-COPY . /app
-
-COPY requirements.txt /app/
+RUN ls -la
+WORKDIR /opt/rtr_app 
+RUN pwd
+RUN ls -la
+COPY ./requirements.txt /opt/rtr_app/requirements.txt
+RUN ls -la
 RUN pip install -r requirements.txt
