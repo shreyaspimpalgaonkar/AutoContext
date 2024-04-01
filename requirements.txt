@@ -1,0 +1,4 @@
+anthropic==0.21.3 ; python_version >= "3.9" and python_version < "4.0"
+python-dotenv
+r2r[parsing,eval]
+modal==0.62.24
