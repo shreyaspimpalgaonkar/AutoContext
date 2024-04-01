@@ -19,7 +19,7 @@ SECRET_KEY=your_secret_key
 ```
 
 ## Running the Project
-uvicorn main:app --reload
+uvicorn main:web_app --reload
 
 ## Deployment
 We use modal for deployment which should have been installed while installing the requirements.txt file.
