@@ -51,20 +51,6 @@ async def get_embedding(request: Request):
     
     return search_response
 
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        port=80098,
-        "main:web_app",
-        port=8000,
-        reload=True,
-        ssl_keyfile="key.pem",
-        ssl_certfile="cert.pem",
-    )
-# create a DB locally
-
-
 stub = Stub()
 image = Image.from_registry("python:3.11")
 image = image.pip_install_from_requirements("requirements.txt")
