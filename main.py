@@ -1,5 +1,4 @@
 import os
-import uuid
 
 import anthropic
 import uvicorn
@@ -7,10 +6,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from modal import Image, Mount, Stub, asgi_app
-from r2r.client import R2RClient
-from client import AutoContextRAGClient
 
-from slack_integration import router as slack_router
+from client import AutoContextRAGClient
 
 load_dotenv()  # This loads the environment variables from .env.
 
@@ -20,9 +17,10 @@ web_app.mount("/static", StaticFiles(directory="static"), name="static")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-web_app.include_router(slack_router)
-
-
+USE_SLACK = bool(int(os.environ.get("USE_SLACK", "0")))
+if USE_SLACK:
+    from slack_integration import router as slack_router
+    web_app.include_router(slack_router)
 
 rag_client = AutoContextRAGClient()
 
