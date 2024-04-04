@@ -3,14 +3,12 @@
 
 import os
 import uuid
-from r2r.client import R2RClient
-from modal import Image
 from bs4 import BeautifulSoup
-
+import requests
 
 class AutoContextRAGClient:
     def __init__(self):
-        self.client = R2RClient(os.environ["R2R_ENDPOINT"])
+        self.base_url = os.environ["R2R_ENDPOINT"]
 
     def clean_text(self, text):
 
@@ -30,21 +28,49 @@ class AutoContextRAGClient:
 
         return text
 
-    def add_entry(self, url, text):
+    def add_entry(self, entry):
         """
         Add a new entry to the database.
         """
-
-        text = self.clean_text(text)
-
-        entry = {
-            "document_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{url}")),
-            "blobs": {"txt": text},
-            "metadata": {"url": url},
+        metadata = {
+            "url": entry["content"]["url"],
+            "title": entry["content"]["title"],
+            "time": entry["content"]["time"],
+            "domain": entry["domain"],
+            "user_uuid": entry["user_uuid"]
         }
+        
+        document_id =  str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{metadata['url']}"))
+        url = f"{self.base_url}/add_entry/"
+        json_data = {
+            "entry": {
+                "document_id": document_id,
+                "blobs": { 'html' : entry['content']['text']},
+                "metadata": metadata or {},
+            },
+            "settings": {"embedding_settings": {"do_upsert": True}},
+        }
+        response = requests.post(url, json=json_data)
+        print(response.json())
+        return response.json()
 
-        bulk_upsert_response = self.client.add_entry(entry, do_upsert=True)
-        return bulk_upsert_response
-
-    def get_entry(self, txt):
-        return self.client.search(txt, 5)
+    def get_entry(self, entry):
+        
+        url = f"{self.base_url}/search/"
+        
+        query = entry['text']
+        user_uuid = entry['user_uuid']
+        
+        filters = {'user_uuid': user_uuid}
+        settings = None
+        
+        json_data = {
+            "query": query,
+            "filters": filters or {},
+            "limit": 5,
+            "settings": settings or {},
+        }
+        response = requests.post(url, json=json_data)
+        print("hiohifahds")
+        print(response.json())
+        return response.json()

@@ -36,26 +36,23 @@ async def say_hello(name: str):
 async def add_embedding(request: Request):
     print("inside add_entry")
     req = await request.json()
-    result = rag_client.add_entry(req["text"], req["url"])
+    result = rag_client.add_entry(req)
     return result
 
 
 @web_app.post("/get_entry")
 async def get_embedding(request: Request):
     req = await request.json()
-
-    search_response = rag_client.client.search(
-        req["text"],
-        5,
-    )
+    search_response = rag_client.get_entry(req)
     
     return search_response
 
 
 if __name__ == "__main__":
+    print("Uvicorn server is running")
     uvicorn.run(
         "main:web_app",
-        port=8000,
+        port=8080,
         reload=True,
         ssl_keyfile="key.pem",
         ssl_certfile="cert.pem",
