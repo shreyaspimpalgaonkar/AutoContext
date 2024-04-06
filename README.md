@@ -1,4 +1,4 @@
-# Hackathon Project Setup and Deployment
+# Project Setup and Deployment
 
 ## Local Environment Setup
 
